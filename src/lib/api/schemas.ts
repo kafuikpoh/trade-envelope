@@ -7,6 +7,11 @@ export const Product = z.enum(["Ago", "Pms", "JetA1"]);
 export const InsuranceMode = z.enum(["PercentOfValue", "FlatPerMt"]);
 export const Anchor = z.enum(["BillOfLading", "Arrival", "CalendarMonth"]);
 export const Settlement = z.enum(["BillOfLading", "Outturn"]);
+export const ViabilityStatus = z.enum([
+  "Viable",
+  "TightMargin",
+  "DeadOnArrival",
+]);
 
 const date = z.string(); // DateOnly -> "YYYY-MM-DD"
 const opt = <T extends z.ZodTypeAny>(s: T) => s.nullish();
@@ -78,6 +83,12 @@ export const TradeOpportunitySummary = z.object({
   hasBuyerRequirement: z.boolean(),
   activeOfferCount: z.number(),
   totalOfferCount: z.number(),
+  // Optional: a deal nobody has evaluated yet (or one edited since) has no economics.
+  product: opt(Product),
+  quantityMt: opt(z.number()),
+  bestRoomUsdPerMt: opt(z.number()),
+  bestViabilityStatus: opt(ViabilityStatus),
+  lastEvaluatedAtUtc: opt(z.string()),
 });
 export const paged = <T extends z.ZodTypeAny>(item: T) =>
   z.object({
@@ -85,6 +96,8 @@ export const paged = <T extends z.ZodTypeAny>(item: T) =>
     page: z.number(),
     pageSize: z.number(),
     totalCount: z.number(),
+    hasNextPage: z.boolean().optional(),
+    hasPreviousPage: z.boolean().optional(),
   });
 
 export const PriceBridge = z.object({
@@ -117,7 +130,7 @@ export const OfferEvaluation = z.object({
   roomUsdPerMt: opt(z.number()),
   quantityMt: opt(z.number()),
   totalRoom: opt(Money),
-  viabilityStatus: opt(z.enum(["Viable", "TightMargin", "DeadOnArrival"])),
+  viabilityStatus: opt(ViabilityStatus),
   viabilityReason: opt(z.string()),
   isAssumed: z.boolean(),
   breakEvenIndexLevel: opt(z.number()),
@@ -125,26 +138,39 @@ export const OfferEvaluation = z.object({
   warnings: z.array(EvaluationWarning).default([]),
 });
 export const Evaluation = z.array(OfferEvaluation); // ASSUMED: evaluate returns an array
-// Fee payloads are ASSUMED (not yet supplied) and deliberately lenient; a mismatch hides the fee panel instead of breaking the page.
-export const Entitlement = z
-  .object({
-    id: z.string(),
-    side: z.string(),
-    participantName: z.string(),
-    rateUsdPerMt: z.number(),
-    isSelf: z.boolean().default(false),
-    status: z.string().optional(),
-  })
-  .passthrough();
-export const FeeAgreement = z
-  .object({
-    id: z.string(),
-    totalPoolUsdPerMt: z.number().optional(),
-    buyerSideUsdPerMt: z.number().optional(),
-    sellerSideUsdPerMt: z.number().optional(),
-    entitlements: z.array(Entitlement).default([]),
-  })
-  .passthrough();
+// Mirrors FeeAgreementResponse / ReconciliationResponse: entitlements live inside each side,
+// and an entitlement carries no side of its own.
+export const ClaimStatus = z.enum(["Proposed", "Agreed", "ImfpaSigned"]);
+export const Entitlement = z.object({
+  id: z.string(),
+  participantName: z.string(),
+  rateUsdPerMt: z.number(),
+  isSelf: z.boolean().default(false),
+  status: ClaimStatus,
+});
+export const FeeSide = z.object({
+  side: z.enum(["Buyer", "Seller"]),
+  allocatedUsdPerMt: z.number(),
+  entitledUsdPerMt: z.number(),
+  unallocatedUsdPerMt: z.number(),
+  entitlements: z.array(Entitlement).default([]),
+});
+export const FeeAgreement = z.object({
+  id: z.string(),
+  tradeOpportunityId: z.string(),
+  totalPoolUsdPerMt: z.number(),
+  buyerSide: FeeSide,
+  sellerSide: FeeSide,
+  offerRooms: z
+    .object({
+      offerId: z.string(),
+      roomUsdPerMt: z.number(),
+      quantityMt: z.number(),
+      isAssumed: z.boolean(),
+    })
+    .array()
+    .default([]),
+});
 export const CoverageItem = z
   .object({
     offerId: z.string(),
@@ -159,24 +185,22 @@ export const Coverage = z
     z.object({ offers: z.array(CoverageItem) }).passthrough(),
   ])
   .transform((v) => (Array.isArray(v) ? v : v.offers));
-export const Reconcile = z
-  .object({
-    isBalanced: z.boolean().optional(),
-    buyerSideUnallocatedUsdPerMt: z.number().optional(),
-    sellerSideUnallocatedUsdPerMt: z.number().optional(),
-    offers: z
-      .array(
-        z
-          .object({
-            offerId: z.string(),
-            estimatedPoolPayout: z.number().optional(),
-            estimatedTakeHome: z.number().optional(),
-          })
-          .passthrough(),
-      )
-      .default([]),
-  })
-  .passthrough();
+export const Reconcile = z.object({
+  isBalanced: z.boolean(),
+  buyerUnallocatedUsdPerMt: z.number(),
+  sellerUnallocatedUsdPerMt: z.number(),
+  selfRateUsdPerMt: z.number(),
+  offerEstimates: z
+    .array(
+      z.object({
+        offerId: z.string(),
+        quantityMt: z.number(),
+        estimatedPoolPayout: Money,
+        estimatedTakeHome: Money,
+      }),
+    )
+    .default([]),
+});
 
 /* ---------- Requests (validated before sending) ---------- */
 export const PriceBasisRequest = z.object({
@@ -211,6 +235,7 @@ export const AddOfferRequest = z
 
 export type Incoterm = z.infer<typeof Incoterm>;
 export type TradeOpportunity = z.infer<typeof TradeOpportunity>;
+export type TradeOpportunitySummary = z.infer<typeof TradeOpportunitySummary>;
 export type SupplierOffer = z.infer<typeof SupplierOffer>;
 export type OfferEvaluation = z.infer<typeof OfferEvaluation>;
 export type FeeAgreement = z.infer<typeof FeeAgreement>;

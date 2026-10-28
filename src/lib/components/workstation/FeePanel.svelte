@@ -44,10 +44,6 @@
 
   const m = (s: string) => (ws.presentation ? "••••" : s);
 
-  const list = (s: string) =>
-    a?.entitlements.filter((e) => e.side.toLowerCase() === s.toLowerCase()) ??
-    [];
-
   const spaced = (s: string) => s.replace(/([a-z])([A-Z])/g, "$1 $2");
 
   // --- API calls (all amounts come from, and are validated by, the backend) ---
@@ -109,12 +105,47 @@
       room > 0 &&
       room !== a.totalPoolUsdPerMt,
   );
-  const split = $derived(
-    a?.totalPoolUsdPerMt && a.sellerSideUsdPerMt != null
-      ? Math.round((a.sellerSideUsdPerMt / a.totalPoolUsdPerMt) * 100)
-      : null,
+
+  // The API groups entitlements under each side, so one derived row feeds both pool cards.
+  const sides = $derived(
+    (
+      [
+        {
+          key: "Seller",
+          label: "Seller-Side Pool",
+          side: a?.sellerSide,
+          left: r?.sellerUnallocatedUsdPerMt,
+        },
+        {
+          key: "Buyer",
+          label: "Buyer-Side Pool",
+          side: a?.buyerSide,
+          left: r?.buyerUnallocatedUsdPerMt,
+        },
+      ] as const
+    ).map(({ key, label, side, left }) => ({
+      key,
+      label,
+      left,
+      pool: side?.allocatedUsdPerMt,
+      entitlements: side?.entitlements ?? [],
+    })),
   );
-  const self = $derived(a?.entitlements.find((e) => e.isSelf));
+
+  const split = $derived.by(() => {
+    const total = a?.totalPoolUsdPerMt;
+    const seller = a?.sellerSide.allocatedUsdPerMt;
+    return total != null && seller != null
+      ? Math.round((seller / total) * 100)
+      : null;
+  });
+  const self = $derived(
+    sides.flatMap((s) => s.entitlements).find((e) => e.isSelf),
+  );
+
+  // Reconcile returns these as Money, not bare numbers.
+  const takeHome = $derived(th?.estimatedTakeHome?.amount);
+  const poolPayout = $derived(th?.estimatedPoolPayout?.amount);
 
   const claims = (cur?: string) => [
     ...new Set(["Proposed", "Agreed", "ImfpaSigned", ...(cur ? [cur] : [])]),
@@ -140,20 +171,6 @@
 
   const card = "rounded-lg border bg-muted/40 p-3";
   const section = "gap-0 rounded-lg bg-muted/40 py-3 shadow-none";
-  const sides = $derived([
-    {
-      key: "Seller" as const,
-      label: "Seller-Side Pool",
-      pool: a?.sellerSideUsdPerMt,
-      left: r?.sellerSideUnallocatedUsdPerMt,
-    },
-    {
-      key: "Buyer" as const,
-      label: "Buyer-Side Pool",
-      pool: a?.buyerSideUsdPerMt,
-      left: r?.buyerSideUnallocatedUsdPerMt,
-    },
-  ]);
 </script>
 
 <Card.Root
@@ -249,7 +266,7 @@
                   bind:open={splitOpen}
                   onOpenChange={(o) => {
                     if (o) {
-                      buyerDraft = a?.buyerSideUsdPerMt;
+                      buyerDraft = a?.buyerSide.allocatedUsdPerMt;
                       splitError = "";
                     }
                   }}
@@ -341,7 +358,7 @@
           </Card.Header>
           <Separator />
           <Card.Content class="space-y-2 px-3 pt-3">
-            {#each list(s.key) as e (e.id)}
+            {#each s.entitlements as e (e.id)}
               <div
                 in:fade={{ duration: 150 }}
                 class="flex items-center justify-between gap-2 rounded-md border px-2 py-2 text-sm {e.isSelf
@@ -478,8 +495,8 @@
             >DESK NET</span
           >
         </div>
-        <div class="num text-3xl font-bold" use:flash={th?.estimatedTakeHome}>
-          {th?.estimatedTakeHome != null ? m(usd(th.estimatedTakeHome)) : "–"}
+        <div class="num text-3xl font-bold" use:flash={takeHome}>
+          {takeHome != null ? m(usd(takeHome)) : "–"}
         </div>
         <p class="text-xs text-slate-300">
           {#if th && self && qty != null}Based on {m(usd(self.rateUsdPerMt))} / MT
@@ -487,10 +504,10 @@
             entitlement on this cargo.{:else}Evaluate the deal and add your own
             entitlement to see this.{/if}
         </p>
-        {#if th?.estimatedPoolPayout != null}<p
+        {#if poolPayout != null}<p
             class="num text-xs text-slate-400"
           >
-            Pool payout, all entitlements: {m(usd(th.estimatedPoolPayout, 0))}
+            Pool payout, all entitlements: {m(usd(poolPayout, 0))}
           </p>{/if}
       </Card.Root>
     {/if}

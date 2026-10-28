@@ -59,8 +59,9 @@ export class Workstation {
       null,
   );
   selectedReconcile = $derived(
-    this.reconcile?.offers.find((o) => o.offerId === this.selected?.offer.id) ??
-      null,
+    this.reconcile?.offerEstimates.find(
+      (o) => o.offerId === this.selected?.offer.id,
+    ) ?? null,
   );
 
   /** Optionally apply a change, then reload (the page load re-runs POST /evaluate). */
