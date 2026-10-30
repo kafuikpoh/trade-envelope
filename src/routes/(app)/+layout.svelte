@@ -4,7 +4,7 @@
   import NewDealButton from "#lib/components/workstation/NewDealButton.svelte";
   import { Toaster } from "#lib/components/ui/sonner/index.js";
 
-  let { children } = $props();
+  let { children, data } = $props();
   // TODO: global hotkeys (N = new deal, G then T = blotter), theme toggle (mode-watcher)
 </script>
 
@@ -20,6 +20,18 @@
       size="sm"
       class="h-7">Settings</Button
     >
+    {#if data.user}
+      <div class="flex items-center gap-2">
+        <span class="text-xs text-muted-foreground" title={data.user.email}
+          >{data.user.name}</span
+        >
+        <form method="POST" action="/logout" class="contents">
+          <Button variant="outline" size="sm" type="submit" class="h-7"
+            >Sign out</Button
+          >
+        </form>
+      </div>
+    {/if}
   </nav>
 </header>
 <main class="p-3">{@render children()}</main>

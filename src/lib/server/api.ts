@@ -1,5 +1,6 @@
 import { API_BASE_URL } from "$app/env/private";
-import { error, type Cookies } from "@sveltejs/kit";
+import { error, redirect, type Cookies } from "@sveltejs/kit";
+import { readSession } from "#lib/server/session.js";
 import type { ZodType } from "zod";
 
 export const forward = (
@@ -9,7 +10,8 @@ export const forward = (
   path: string,
   body?: string,
 ) => {
-  const token = cookies.get("session"); // TODO: the OpenAPI doc declares no security scheme; confirm auth style
+  // The `session` cookie is an opaque id; the bearer only ever exists on the server.
+  const token = readSession(cookies)?.accessToken;
   return f(`${API_BASE_URL}${path}`, {
     method,
     body,
@@ -35,6 +37,7 @@ export async function api<T>(
     path,
     body === undefined ? undefined : JSON.stringify(body),
   );
+  if (res.status === 401) redirect(303, "/login?error=expired");
   if (!res.ok) error(res.status, (await res.text()) || res.statusText);
   return res.status === 204 ? (undefined as T) : ((await res.json()) as T);
 }
@@ -128,6 +131,9 @@ export async function soft<T>(
 ): Promise<T | null> {
   const r = await send(f, cookies, method, path);
   if (!r.ok) {
+    // A 401 is not "optional data missing": the session died server-side (revoked role, rejected
+    // audience). Bounce to sign-in instead of rendering an empty page that looks like no data.
+    if (r.status === 401) redirect(303, "/login?error=expired");
     if (![400, 404, 409].includes(r.status))
       console.warn(`${method} ${path} -> ${r.status}`);
     return null;
