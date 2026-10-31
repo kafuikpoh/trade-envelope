@@ -202,6 +202,10 @@ export const Reconcile = z.object({
     .default([]),
 });
 
+// POST /users/login returns AccessTokenResponse. The password grant hands back nothing else to key a
+// session on, so a response without it is a contract break rather than a wrong password.
+export const LoginResponse = z.object({ accessToken: z.string().min(1) });
+
 /* ---------- Requests (validated before sending) ---------- */
 export const PriceBasisRequest = z.object({
   currency: z.string().min(1),
@@ -268,6 +272,9 @@ export const warningText = (w: z.infer<typeof EvaluationWarning>) =>
 export const CreateOpportunityRequest = z.object({
   referenceNumber: z.string().min(1),
   viabilityThresholdUsdPerMt: z.number().min(0).optional(),
+});
+export const DuplicateOpportunityRequest = z.object({
+  referenceNumber: z.string().min(1),
 });
 export const BuyerRequirementRequest = z.object({
   product: Product,

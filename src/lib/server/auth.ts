@@ -154,6 +154,66 @@ export async function exchangeCode(code: string, verifier: string): Promise<Toke
   };
 }
 
+type JwtClaims = {
+  sub?: unknown;
+  email?: unknown;
+  given_name?: unknown;
+  family_name?: unknown;
+  exp?: unknown;
+};
+
+/**
+ * Payload of an access token, read without checking the signature. Only ever called with a token this
+ * process fetched server-to-server — from Keycloak's token endpoint or from `API_BASE_URL`. The path a
+ * signature check defends against is the browser supplying a token, and the browser never holds one.
+ */
+function decodeJwtPayload(accessToken: string): JwtClaims {
+  const segment = accessToken.split(".")[1];
+  if (!segment) throw new AuthError("idp", "access token had no payload");
+  const base64 = segment.replaceAll("-", "+").replaceAll("_", "/");
+  return JSON.parse(
+    atob(base64.padEnd(base64.length + ((4 - (base64.length % 4)) % 4), "=")),
+  ) as JwtClaims;
+}
+
+/**
+ * The session's lifetime, read off the access token. `/users/login` answers with the token alone —
+ * `AccessTokenResponse` carries no `expires_in` — so the cookie's `maxAge` comes from the `exp` claim
+ * the server just received from the issuer. Unparseable is treated as "an hour", never as a refusal:
+ * a session that outlives its token fails on the next request with a clean 401, which is better than
+ * turning away a valid password over a decoding quirk.
+ */
+export function tokenLifetimeSeconds(accessToken: string): number {
+  let claims: JwtClaims;
+  try {
+    claims = decodeJwtPayload(accessToken);
+  } catch {
+    return 3600;
+  }
+  if (typeof claims.exp !== "number") return 3600;
+  return Math.max(60, claims.exp - Math.floor(Date.now() / 1000));
+}
+
+/**
+ * Identity for the password grant, where `userinfo` cannot be used. The API mints that token through
+ * Keycloak's container address, so it says `iss=http://identity:8080/realms/trade-envelope` while this
+ * process discovers Keycloak at `http://localhost:18080/...` — and `userinfo` rejects the mismatch with
+ * `invalid_token`, even though the API itself lists both issuers as valid. The claims are the same ones
+ * `userinfo` would have returned, so they are read off the token instead of fetched back from the
+ * issuer. Align `Identity:TokenUrl` with the public issuer and this function can go.
+ */
+export function getIdentityFromAccessToken(accessToken: string): SignedInUser {
+  const c = decodeJwtPayload(accessToken);
+  const user: SignedInUser = {
+    identityId: c.sub as string,
+    email: c.email as string,
+    firstName: c.given_name as string,
+    lastName: c.family_name as string,
+  };
+  if (!user.identityId) throw new AuthError("idp", "access token had no sub");
+  return user;
+}
+
 /**
  * Identity comes from `userinfo`, not from validating the `id_token`: the access token arrived
  * server-to-server straight from the issuer, so the attacks id_token validation defends against
