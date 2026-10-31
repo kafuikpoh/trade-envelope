@@ -127,7 +127,9 @@ export async function soft<T>(
   cookies: Cookies,
   method: string,
   path: string,
-  schema: ZodType<T, any, any>,
+  // `ZodType<T, any, any>` does not infer under zod 4 — T collapses to {} and every caller loses the
+  // schema's fields. Two parameters, like apiParsed above, is what actually resolves the output type.
+  schema: ZodType<T>,
 ): Promise<T | null> {
   const r = await send(f, cookies, method, path);
   if (!r.ok) {

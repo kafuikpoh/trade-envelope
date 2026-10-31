@@ -26,21 +26,18 @@ export interface Row {
 
 /** View state only. Pricing, ranking, viability and coverage all come from the .NET API. */
 export class Workstation {
+  constructor(private data: () => WorkstationData) {}
+
   presentation = $state(false);
   selectedId = $state("");
   busy = $state(false);
   error = $state("");
 
-  // Declare the property before the derived fields.
-  data: () => WorkstationData;
-
-  constructor(data: () => WorkstationData) {
-    this.data = data;
-  }
-
-  opp = $derived(this.data().opportunity);
-  agreement = $derived(this.data().agreement);
-  reconcile = $derived(this.data().reconcile);
+  // $derived.by rather than $derived, because these read `this.data`: the expression form is checked
+  // as if it ran in the field initializer, which is before the constructor has the accessor to give.
+  opp = $derived.by(() => this.data().opportunity);
+  agreement = $derived.by(() => this.data().agreement);
+  reconcile = $derived.by(() => this.data().reconcile);
 
   rows = $derived.by<Row[]>(() => {
     const ev = new Map(this.data().evaluations.map((e) => [e.offerId, e]));
@@ -54,8 +51,9 @@ export class Workstation {
     this.rows.find((r) => r.offer.id === this.selectedId) ?? this.rows[0],
   );
 
-  selectedCoverage = $derived(
-    this.data().coverage.find((c) => c.offerId === this.selected?.offer.id) ??
+  selectedCoverage = $derived.by(
+    () =>
+      this.data().coverage.find((c) => c.offerId === this.selected?.offer.id) ??
       null,
   );
   selectedReconcile = $derived(
