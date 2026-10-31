@@ -1,16 +1,21 @@
 <script lang="ts">
   import { goto } from "$app/navigation";
   import CopyIcon from "@lucide/svelte/icons/copy";
+  import CopyPlusIcon from "@lucide/svelte/icons/copy-plus";
   import EllipsisIcon from "@lucide/svelte/icons/ellipsis";
   import ExternalLinkIcon from "@lucide/svelte/icons/external-link";
   import { toast } from "svelte-sonner";
   import { Button } from "#lib/components/ui/button/index.js";
   import * as DropdownMenu from "#lib/components/ui/dropdown-menu/index.js";
+  import DealDuplicateDialog from "./deal-duplicate-dialog.svelte";
 
   let {
     id,
     referenceNumber,
   }: { id: string; referenceNumber: string } = $props();
+
+  // Controlled open state: a trigger nested inside a menu item fights the menu for focus.
+  let showDuplicate = $state(false);
 
   async function copyReference() {
     try {
@@ -45,6 +50,17 @@
       <CopyIcon />
       Copy reference
     </DropdownMenu.Item>
-    <!-- Duplicate lands with the backend command: POST /trade-opportunities/{id}/duplicate -->
+    <DropdownMenu.Item onclick={() => (showDuplicate = true)}>
+      <CopyPlusIcon />
+      Duplicate deal
+    </DropdownMenu.Item>
   </DropdownMenu.Content>
 </DropdownMenu.Root>
+
+{#if showDuplicate}
+  <DealDuplicateDialog
+    {id}
+    {referenceNumber}
+    bind:open={showDuplicate}
+  />
+{/if}

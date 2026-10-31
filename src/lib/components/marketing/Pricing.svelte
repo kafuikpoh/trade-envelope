@@ -20,12 +20,12 @@
     {
       name: "Brokerage desk",
       price: 149,
-      note: "For trading desks and mandate teams, up to 5 seats",
+      note: "For trading desks and mandate teams",
       cta: "Start desk trial",
       href: "/register?plan=desk",
       items: [
         "Everything in Solo",
-        "5 seats with a shared trade blotter",
+        "Shared trade blotter for the whole desk",
         "Multi-tier mandate and sub-broker waterfalls",
         "Custom desk branding on PDFs",
         "Audit blotter and CSV export",
