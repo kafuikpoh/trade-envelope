@@ -1,10 +1,23 @@
 <script lang="ts">
+  import { refreshAll } from "$app/navigation";
   import { Button } from "#lib/components/ui/button/index.js";
   import Logo from "#lib/components/brand/Logo.svelte";
   import NewDealButton from "#lib/components/workstation/NewDealButton.svelte";
   import { Toaster } from "#lib/components/ui/sonner/index.js";
 
   let { children, data } = $props();
+
+  // The `no-store` set in hooks.server.ts is what keeps Chrome from handing this document back out of its
+  // back/forward cache, but that is the browser's choice, not something this app can enforce. A browser that
+  // restores anyway fires `pageshow` with `persisted` and never asks the server, so the desk would read a
+  // dashboard whose session has ended. Re-run the loaders and let the guard give the real answer.
+  $effect(() => {
+    const onShow = (event: PageTransitionEvent) => {
+      if (event.persisted) void refreshAll();
+    };
+    window.addEventListener("pageshow", onShow);
+    return () => window.removeEventListener("pageshow", onShow);
+  });
   // TODO: global hotkeys (N = new deal, G then T = blotter), theme toggle (mode-watcher)
 </script>
 

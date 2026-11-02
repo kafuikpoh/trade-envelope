@@ -17,5 +17,10 @@ export const handle: Handle = async ({ event, resolve }) => {
       headers: { "content-type": "application/json" },
     });
 
+  // Every document rendered here is either this desk's own data or a step of sign-in, so none of it may be
+  // served back out of a browser cache. `no-store` also makes a document ineligible for Chrome's back/forward
+  // cache: without it, Back after a sign-out restores the dashboard the browser still holds, and no request
+  // ever reaches this server — so the (app) guard, which only runs on a request, never gets to answer.
+  event.setHeaders({ "cache-control": "no-store" });
   return resolve(event);
 };
