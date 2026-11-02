@@ -48,6 +48,10 @@ export async function call<T = unknown>(
     void goto(`/login?next=${encodeURIComponent(location.pathname)}`);
     throw new Error("Your sign-in is no longer valid.");
   }
+  // A 403 is not a signed-out desk: the token was accepted and this desk may not do this particular
+  // thing. Sending it to /login would lose the answer, so the API's reason is what surfaces.
+  if (res.status === 403)
+    throw new Error(describe(text) || "Your desk is not permitted to do this.");
   if (!res.ok)
     throw new Error(describe(text) || `Request failed (${res.status})`);
   return (text ? JSON.parse(text) : undefined) as T;

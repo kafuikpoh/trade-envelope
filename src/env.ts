@@ -9,22 +9,18 @@ export const variables = defineEnvVars({
     description: 'Set to "true" to enforce the (app) session guard and reject unauthenticated /api/* calls.',
     schema: (value: string | undefined) => value === 'true'
   },
-  API_SECRET: {},
   KEYCLOAK_ISSUER_URL: {
     description: "Keycloak realm issuer, used for OIDC discovery",
     schema: (value: string | undefined) =>
       value ?? "http://localhost:18080/realms/trade-envelope",
   },
+  // Public client, and deliberately the only client id here: sign-in is authorization code + PKCE, so no
+  // secret exists for this process to hold. The confidential client and its secret belong to the .NET API,
+  // which is the only thing allowed to call Keycloak's Admin REST.
   KEYCLOAK_CLIENT_ID: {
-    description: "OIDC confidential client SvelteKit signs in as",
+    description: "OIDC public client SvelteKit signs in as",
     schema: (value: string | undefined) =>
-      value ?? "trade-envelope-confidential-client",
-  },
-  KEYCLOAK_CLIENT_SECRET: {
-    // Optional at boot so `npm run check` and `npm run build` work without it; /login/start refuses
-    // to redirect until it is set. Never commit the value.
-    description: "Client secret for KEYCLOAK_CLIENT_ID",
-    schema: (value: string | undefined) => value || undefined,
+      value ?? "trade-envelope-public-client",
   },
   AUTH_REDIRECT_BASE_URL: {
     description: "Externally reachable origin of this app; the OIDC redirect URI and cookie `secure` flag derive from it",
